@@ -1,5 +1,6 @@
 from azure.ai.ml import MLClient, command
-from azure.ai.ml.entities import Environment, AmlCompute, Input
+from azure.ai.ml.entities import Environment, AmlCompute
+from azure.ai.ml.inputs import Input
 from azure.identity import DefaultAzureCredential
 
 # --- Connection Details ---
