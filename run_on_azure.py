@@ -63,7 +63,7 @@ for line in requirements_content.splitlines():
         conda_yaml_content += f"    - {line.strip()}\n"
 
 # Write the conda.yaml content to a temporary file
-conda_file_path = "/Users/morgan/Documents/azure_ml/conda.yaml"
+conda_file_path = "./conda.yaml"
 with open(conda_file_path, "w") as f:
     f.write(conda_yaml_content)
 
