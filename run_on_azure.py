@@ -89,5 +89,5 @@ job = command(
 # --- Submit Job ---
 print("\nSubmitting the job to Azure ML...")
 returned_job = ml_client.jobs.create_or_update(job)
-print(f"Job submitted! Check its status here: {returned_job.studio_url}")
+print("Job submitted! Check its status in Azure ML Studio.")
 heck its status here: {returned_job.studio_url}")
