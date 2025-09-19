@@ -43,7 +43,7 @@ except Exception:
 
 # --- Define Environment ---
 # Read requirements.txt content
-with open("/Users/morgan/Documents/azure_ml/cifar10_cnn_project/requirements.txt", "r") as f:
+with open("./cifar10_cnn_project/requirements.txt", "r") as f:
     requirements_content = f.read()
 
 # Create a conda.yaml content dynamically
