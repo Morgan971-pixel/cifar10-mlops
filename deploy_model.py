@@ -1,7 +1,8 @@
 from azure.ai.ml import MLClient
-from azure.ai.ml.entities import Model, Environment, CodeConfiguration, AciWebservice
+from azure.ai.ml.entities import Model, Environment, CodeConfiguration, ManagedOnlineEndpoint, ManagedOnlineDeployment, ProbeSettings
 from azure.identity import DefaultAzureCredential
 import os
+import time
 
 # --- Connection Details ---
 subscription_id = "2b850e23-397c-4461-a543-00a8bf14ee7b"
@@ -20,8 +21,12 @@ ml_client = MLClient(
 # --- Retrieve Registered Model ---
 model_name = "cifar10-cnn-model"
 # Get the latest version of the model
-registered_model = ml_client.models.get(name=model_name, label="latest")
-print(f"Retrieved model: {registered_model.name}, version: {registered_model.version}")
+try:
+    registered_model = ml_client.models.get(name=model_name, label="latest")
+    print(f"Retrieved model: {registered_model.name}, version: {registered_model.version}")
+except Exception as e:
+    print(f"Could not retrieve model '{model_name}' with label 'latest'. Please ensure the training job completed successfully and registered the model. Error: {e}")
+    exit()
 
 # --- Define Inference Environment ---
 # Construct absolute path to inference_requirements.txt relative to the script's location
@@ -59,22 +64,48 @@ inference_env = Environment(
 )
 ml_client.environments.create_or_update(inference_env)
 
-# --- Define Deployment ---
-aci_deployment = AciWebservice(
-    name="cifar10-aci-deployment",
-    description="CIFAR-10 CNN model deployment on ACI",
+# --- Define Online Endpoint ---
+# Endpoint names must be unique in the Azure region
+# Using a timestamp to ensure uniqueness
+endpoint_name = "cifar10-endpoint-" + str(int(time.time()))
+
+endpoint = ManagedOnlineEndpoint(
+    name=endpoint_name,
+    description="Online endpoint for CIFAR-10 CNN model",
+    auth_mode="key",
+)
+
+# --- Create/Update Endpoint ---
+print(f"\nCreating/Updating endpoint '{endpoint_name}'...")
+ml_client.online_endpoints.begin_create_or_update(endpoint).result()
+print("Endpoint created/updated successfully.")
+
+# --- Define Online Deployment ---
+deployment_name = "blue"
+deployment = ManagedOnlineDeployment(
+    name=deployment_name,
+    endpoint_name=endpoint_name,
     model=registered_model,
     environment=inference_env,
     code_configuration=CodeConfiguration(
         code="./cifar10_cnn_project", # Path to the directory containing score.py
         scoring_script="score.py",
     ),
-    cpu_cores=1,
-    memory_gb=1,
-    auth_enabled=True, # Enable key-based authentication
+    instance_type="Standard_DS3_v2", # Choose an appropriate VM size
+    instance_count=1,
+    liveness_probe=ProbeSettings(initial_delay=10, period=60, timeout=60, failure_threshold=10, success_threshold=1),
+    readiness_probe=ProbeSettings(initial_delay=10, period=60, timeout=60, failure_threshold=10, success_threshold=1),
 )
 
-# --- Submit Deployment ---
-print("\nSubmitting the model deployment to Azure ML...")
-ml_client.deployments.create_or_update(aci_deployment)
-print("Model deployment submitted!")
+# --- Create/Update Deployment ---
+print(f"\nCreating/Updating deployment '{deployment_name}' for endpoint '{endpoint_name}'...")
+ml_client.online_deployments.begin_create_or_update(deployment).result()
+print("Deployment created/updated successfully.")
+
+# --- Set Traffic to New Deployment ---
+print(f"\nSetting traffic to deployment '{deployment_name}'...")
+endpoint.traffic = {deployment_name: 100}
+ml_client.online_endpoints.begin_create_or_update(endpoint).result()
+print("Traffic set successfully.")
+
+print(f"\nDeployment complete! Endpoint URL: {endpoint.scoring_uri}")
