@@ -1,8 +1,10 @@
-from azure.ai.ml import MLClient, command, Input
+from azure.ai.ml import MLClient, command
 from azure.ai.ml.entities import Environment, AmlCompute
 from azure.identity import DefaultAzureCredential
+import os # Import os for path manipulation
 
 # --- Connection Details ---
+# These should ideally come from environment variables in a real CI/CD pipeline
 subscription_id = "2b850e23-397c-4461-a543-00a8bf14ee7b"
 resource_group = "MyFirstScript"
 workspace = "MyFirstScript"
@@ -42,8 +44,13 @@ except Exception:
     print("Compute cluster created successfully.")
 
 # --- Define Environment ---
+# Construct absolute path to requirements.txt relative to the script's location
+# This ensures it works correctly in GitHub Actions runner
+script_dir = os.path.dirname(os.path.abspath(__file__))
+requirements_path = os.path.join(script_dir, "cifar10_cnn_project", "requirements.txt")
+
 # Read requirements.txt content
-with open("./cifar10_cnn_project/requirements.txt", "r") as f:
+with open(requirements_path, "r") as f:
     requirements_content = f.read()
 
 # Create a conda.yaml content dynamically
@@ -57,13 +64,13 @@ dependencies:
   - pip
   - pip:
 """
-# Indent each line of requirements_content
 for line in requirements_content.splitlines():
     if line.strip(): # Only add non-empty lines
         conda_yaml_content += f"    - {line.strip()}\n"
 
-# Write the conda.yaml content to a temporary file
-conda_file_path = "./conda.yaml"
+# Write the conda.yaml content to a temporary file in the current working directory
+# This ensures it's written to a path accessible by the Azure ML SDK
+conda_file_path = "conda.yaml" # Relative to the current working directory of the script
 with open(conda_file_path, "w") as f:
     f.write(conda_yaml_content)
 
@@ -77,8 +84,10 @@ job_env = Environment(
 ml_client.environments.create_or_update(job_env)
 
 # --- Define Command Job ---
+# The 'code' parameter should be a path relative to the repository root
+# which is the working directory of the GitHub Actions runner.
 job = command(
-    code="/Users/morgan/Documents/azure_ml/cifar10_cnn_project",  # Location of the code
+    code="./cifar10_cnn_project",  # Relative path to the code directory
     command="python train.py",
     environment=f"{job_env.name}@latest",
     compute=cluster_name,
@@ -90,4 +99,3 @@ job = command(
 print("\nSubmitting the job to Azure ML...")
 returned_job = ml_client.jobs.create_or_update(job)
 print("Job submitted! Check its status in Azure ML Studio.")
-
